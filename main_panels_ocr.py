@@ -25,7 +25,7 @@ def convert_to_binary(image, thresoldType=cv2.ADAPTIVE_THRESH_MEAN_C, blockSize=
     return binary
 
 
-def get_contours(binary, min_contour_area=15, max_contour_area=500, min_aspect_ratio=0.3, max_aspect_ratio=1.1):
+def get_contours(binary, min_contour_area=50, max_contour_area=500, min_aspect_ratio=0.3, max_aspect_ratio=1.1):
     ''' Get contours in a given binary image '''
     # find contours
     contours, _ = cv2.findContours(
@@ -88,6 +88,33 @@ def get_lines(contours, threshold=15):
     return lines
 
 
+def divide_contours_by_lines(contours, lines, threshold=15):
+    ''' Divide contours based on the lines '''
+    # A dictionary with keys line_1, line_2, ... and values as a list of contours initially empty
+    contours_by_lines = {f'line_{i+1}': [] for i in range(len(lines))}
+    for contour in contours:
+        # calculate the centroid of the contour
+        centroid = get_centroid(contour)
+        for i, line in enumerate(lines):
+            # if the distance between the centroid and the line is less than a threshold, add the contour to the current line
+            if distance_point_to_line(centroid, line) < threshold:
+                contours_by_lines[f'line_{i+1}'].append(contour)
+                break
+    return contours_by_lines
+
+
+def extract_regions_of_interest(image, contours):
+    ''' Extract regions of interest from a given image '''
+    regions = []
+    for contour in contours:
+        # get the bounding box of the contour
+        x, y, w, h = cv2.boundingRect(contour)
+        # extract the region of interest from the image
+        region = image[y:y+h, x:x+w]
+        regions.append(region)
+    return regions
+
+
 def draw_line(image, line):
     ''' Draw a line in a given image '''
     slope, intercept = line
@@ -114,11 +141,11 @@ def draw_on_image(image, contours, centroid=None, lines=None):
 
 if __name__ == '__main__':
     images = load_images('./Práctica2_Datos_Alumnos/test_ocr_panels/')
-    binary = convert_to_binary(images[0])
-    contours = get_contours(binary)
-    centroids = [get_centroid(cnt) for cnt in contours]
-    lines = get_lines(contours)
-    image_contours = draw_on_image(
-        images[0], contours, centroid=centroids, lines=lines)
-    plt.imshow(image_contours)
-    plt.show()
+    for image in images:
+        binary = convert_to_binary(image)
+        contours = get_contours(binary)
+        lines = get_lines(contours)
+        contours_by_lines = divide_contours_by_lines(contours, lines)
+        for line, line_contours in contours_by_lines.items():
+            regions = extract_regions_of_interest(image, line_contours)
+            # TODO: classify the regions
