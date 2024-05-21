@@ -3,31 +3,26 @@ import cv2
 from matplotlib import pyplot as plt
 
 
-def load_images(path):
-    ''' Load all images from a given path '''
-    images = []
-    for filename in os.listdir(path):
-        if filename.endswith('.png'):
-            image = cv2.imread(os.path.join(path, filename))
-            # convert to RGB
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            images.append(image)
-    return images
+def load_image(path):
+    ''' Load an image from a given path'''
+    if not os.path.exists(path):
+        raise FileNotFoundError('The given path does not exist')
+    image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    # convert from BGR to RGB
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    return image
 
 
 def convert_to_binary(image, thresoldType=cv2.ADAPTIVE_THRESH_MEAN_C, blockSize=9, C=5):
     ''' Convert an image to binary '''
-    # convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    # apply adaptive threshold inverse
     binary = cv2.adaptiveThreshold(
         gray, 255, thresoldType, cv2.THRESH_BINARY_INV, blockSize, C)
     return binary
 
 
-def get_contours(binary, min_contour_area=50, max_contour_area=500, min_aspect_ratio=0.3, max_aspect_ratio=1.1):
+def get_contours(binary, min_contour_area=50, max_contour_area=700, min_aspect_ratio=0.25, max_aspect_ratio=1.1):
     ''' Get contours in a given binary image '''
-    # find contours
     contours, _ = cv2.findContours(
         binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     # filter contours based on area
@@ -53,6 +48,8 @@ def get_line(point1, point2):
     ''' Get a line passing through two points in a slope-intercept form '''
     x1, y1 = point1
     x2, y2 = point2
+    if x2 - x1 == 0:
+        return (0, 0)
     slope = (y2 - y1) / (x2 - x1)
     intercept = y1 - slope * x1
     return (slope, intercept)
@@ -67,10 +64,12 @@ def distance_point_to_line(point, line):
 
 def get_lines(contours, threshold=15):
     ''' Get lines in a given image in a slope-intercept form'''
-    # calculate centroids of each contour
     points = [get_centroid(cnt) for cnt in contours]
     # remove duplicates
     points = list(set(points))
+    # if there are less than two centroids, return an empty list
+    if len(points) < 2:
+        return []
     # sort the centroids based on the y-coordinate
     points = sorted(points, key=lambda x: x[1])
     # get a line passing through the first two centroids and add it to the list of lines
@@ -90,10 +89,9 @@ def get_lines(contours, threshold=15):
 
 def divide_contours_by_lines(contours, lines, threshold=15):
     ''' Divide contours based on the lines '''
-    # A dictionary with keys line_1, line_2, ... and values as a list of contours initially empty
+    # a dictionary with keys line_1, line_2, ... and values as a list of contours initially empty
     contours_by_lines = {f'line_{i+1}': [] for i in range(len(lines))}
     for contour in contours:
-        # calculate the centroid of the contour
         centroid = get_centroid(contour)
         for i, line in enumerate(lines):
             # if the distance between the centroid and the line is less than a threshold, add the contour to the current line
@@ -107,9 +105,7 @@ def extract_regions_of_interest(image, contours):
     ''' Extract regions of interest from a given image '''
     regions = []
     for contour in contours:
-        # get the bounding box of the contour
         x, y, w, h = cv2.boundingRect(contour)
-        # extract the region of interest from the image
         region = image[y:y+h, x:x+w]
         regions.append(region)
     return regions
@@ -129,7 +125,6 @@ def draw_on_image(image, contours, centroid=None, lines=None):
     ''' Draw contours, centroids and lines in a given image '''
     image_contours = image.copy()
     cv2.drawContours(image_contours, contours, -1, (0, 255, 0), 2)
-    # draw centroids
     if centroid:
         for cnt in contours:
             x, y = get_centroid(cnt)
@@ -139,13 +134,49 @@ def draw_on_image(image, contours, centroid=None, lines=None):
     return image_contours
 
 
+def create_results(images_path, results_path):
+    ''' Create a results file '''
+    with open(results_path, 'w') as f:
+        for image_name in os.listdir(images_path):
+            if not image_name.endswith('.png'):
+                continue
+            image_str = create_string(images_path, image_name)
+            f.write(image_str)
+
+
+def create_string(images_path, image_name):
+    image = load_image(images_path + image_name)
+    x = image.shape[0] - 1
+    y = image.shape[1] - 1
+    image_str = f'{image_name};0;0;{x};{y};1;1;'
+    binary = convert_to_binary(image)
+    contours = get_contours(binary)
+    lines = get_lines(contours)
+    contours_by_lines = divide_contours_by_lines(contours, lines)
+    for line_contours in contours_by_lines.values():
+        if image_str[-1] != ';':
+            image_str += '+'
+        regions = extract_regions_of_interest(image, line_contours)
+        for region in regions:
+            # TODO: detect the character in the region using the classifier
+            # image_str += detected_character
+            continue
+    return image_str+'\n'
+
+
+def show_results(image_path):
+    ''' Show the results visually on a given image '''
+    image = load_image(image_path)
+    binary = convert_to_binary(image)
+    contours = get_contours(binary)
+    centroids = [get_centroid(cnt) for cnt in contours]
+    lines = get_lines(contours)
+    image_contours = draw_on_image(image, contours, centroids, lines)
+    plt.imshow(image_contours)
+    plt.show()
+
+
 if __name__ == '__main__':
-    images = load_images('./Práctica2_Datos_Alumnos/test_ocr_panels/')
-    for image in images:
-        binary = convert_to_binary(image)
-        contours = get_contours(binary)
-        lines = get_lines(contours)
-        contours_by_lines = divide_contours_by_lines(contours, lines)
-        for line, line_contours in contours_by_lines.items():
-            regions = extract_regions_of_interest(image, line_contours)
-            # TODO: classify the regions
+    images_path = './Práctica2_Datos_Alumnos/test_ocr_panels/'
+    create_results(images_path, './Práctica2_Datos_Alumnos/resultado.txt')
+    # show_results(images_path + '00041_0.png')
