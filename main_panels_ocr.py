@@ -3,7 +3,6 @@ import cv2
 from matplotlib import pyplot as plt
 from lda_normal_bayes_classifier import LdaNormalBayesClassifier
 from evaluar_clasificadores_OCR import getImagesAndLabels, preparingData
-import sys
 
 
 def load_image(path):
@@ -153,6 +152,7 @@ def create_results(images_path, results_path, classifier):
 
 def create_string(images_path, image_name, classifier):
     ''' Create the prediction string for a given image '''
+    labels = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
     image = load_image(images_path + image_name)
     x = image.shape[0] - 1
     y = image.shape[1] - 1
@@ -167,7 +167,7 @@ def create_string(images_path, image_name, classifier):
         regions = extract_regions_of_interest(image, line_contours)
         for region in regions:
             prediction = classifier.predict(region)
-            image_str += prediction
+            image_str += labels[prediction[0]]
     return image_str+'\n'
 
 

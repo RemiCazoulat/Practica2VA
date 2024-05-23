@@ -93,10 +93,10 @@ if __name__ == "__main__":
 
     print('PROCESANDO testing_ocr ------------------------------')
     panels_gt = read_csv_file(
-        './Práctica2_Datos_Alumnos/test_ocr_panels/gt.txt')
+        './test_ocr_panels/gt.txt')
     print(panels_gt)
 
-    panels = read_csv_file('./Práctica2_Datos_Alumnos/resultado.txt')
+    panels = read_csv_file('./resultado.txt')
     print(panels)
 
     plot_recognition_distance(panels_gt, panels)
