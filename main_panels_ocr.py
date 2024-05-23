@@ -1,6 +1,9 @@
 import os
 import cv2
 from matplotlib import pyplot as plt
+from lda_normal_bayes_classifier import LdaNormalBayesClassifier
+from evaluar_clasificadores_OCR import getImagesAndLabels, preparingData
+import sys
 
 
 def load_image(path):
@@ -107,6 +110,10 @@ def extract_regions_of_interest(image, contours):
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
         region = image[y:y+h, x:x+w]
+        # convert the region to the format that the classifier expects
+        region = convert_to_binary(region)
+        region = cv2.resize(region, (25, 25))
+        region = region.flatten().reshape(1, -1)
         regions.append(region)
     return regions
 
@@ -134,17 +141,18 @@ def draw_on_image(image, contours, centroid=None, lines=None):
     return image_contours
 
 
-def create_results(images_path, results_path):
+def create_results(images_path, results_path, classifier):
     ''' Create a results file '''
     with open(results_path, 'w') as f:
         for image_name in os.listdir(images_path):
             if not image_name.endswith('.png'):
                 continue
-            image_str = create_string(images_path, image_name)
+            image_str = create_string(images_path, image_name, classifier)
             f.write(image_str)
 
 
-def create_string(images_path, image_name):
+def create_string(images_path, image_name, classifier):
+    ''' Create the prediction string for a given image '''
     image = load_image(images_path + image_name)
     x = image.shape[0] - 1
     y = image.shape[1] - 1
@@ -158,9 +166,8 @@ def create_string(images_path, image_name):
             image_str += '+'
         regions = extract_regions_of_interest(image, line_contours)
         for region in regions:
-            # TODO: detect the character in the region using the classifier
-            # image_str += detected_character
-            continue
+            prediction = classifier.predict(region)
+            image_str += prediction
     return image_str+'\n'
 
 
@@ -177,6 +184,16 @@ def show_results(image_path):
 
 
 if __name__ == '__main__':
-    images_path = './Práctica2_Datos_Alumnos/test_ocr_panels/'
-    create_results(images_path, './Práctica2_Datos_Alumnos/resultado.txt')
+    images_path = './test_ocr_panels/'
+    training_path = './train_ocr/'
+    # Load the training data
+    train_X, train_y = getImagesAndLabels(training_path)
+    train_X = preparingData(train_X)
+    # Train the classifier
+    classifier = LdaNormalBayesClassifier()
+    classifier.train(train_X, train_y)
+    # Create the results file
+    create_results(
+        images_path, './resultado.txt', classifier)
+    # Show the results on a given image
     # show_results(images_path + '00041_0.png')
