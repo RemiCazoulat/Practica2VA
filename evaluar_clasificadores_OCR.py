@@ -138,7 +138,7 @@ if __name__ == "__main__":
     # 5) Evaluar los resultados
     #accuracy = sklearn.metrics.accuracy_score(gt_labels, predicted_labels)
     #print("Accuracy = ", accuracy)
-    succes_val = np.sum(1 * (val_y == predicted_labels[:,0])) / len(val_y)
+    succes_val = np.sum(1 * (val_y == predicted_labels)) / len(val_y)
     print("Test accuracy: " + str(succes_val * 100) + "%")
 
 

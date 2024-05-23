@@ -58,7 +58,7 @@ class LdaNormalBayesClassifier():
         #print("Test accuracy: {:.2f}%".format(acierto_test * 100))
         
         #y = ... # Obtain the estimated label by the LDA + Bayes classifier
-
+        predicted_y = predicted_y[:,0]
         return predicted_y
 
 
