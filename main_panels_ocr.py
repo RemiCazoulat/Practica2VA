@@ -1,7 +1,7 @@
 import os
 import cv2
 from matplotlib import pyplot as plt
-from lda_normal_bayes_classifier import LdaNormalBayesClassifier
+from hog_normal_bayes_classifier import HOGNormalBayesClassifier
 from evaluar_clasificadores_OCR import getImagesAndLabels, preparingData
 
 
@@ -15,7 +15,7 @@ def load_image(path):
     return image
 
 
-def convert_to_binary(image, thresoldType=cv2.ADAPTIVE_THRESH_MEAN_C, blockSize=9, C=5):
+def convert_to_binary(image, thresoldType=cv2.ADAPTIVE_THRESH_MEAN_C, blockSize=7, C=3):
     ''' Convert an image to binary '''
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     binary = cv2.adaptiveThreshold(
@@ -23,7 +23,7 @@ def convert_to_binary(image, thresoldType=cv2.ADAPTIVE_THRESH_MEAN_C, blockSize=
     return binary
 
 
-def get_contours(binary, min_contour_area=50, max_contour_area=700, min_aspect_ratio=0.25, max_aspect_ratio=1.1):
+def get_contours(binary, min_contour_area=40, max_contour_area=650, min_aspect_ratio=0.20, max_aspect_ratio=1.1):
     ''' Get contours in a given binary image '''
     contours, _ = cv2.findContours(
         binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -85,6 +85,9 @@ def get_lines(contours, threshold=15):
         # otherwise, get another line passing between the last two centroids
         else:
             line = get_line(points[i], points[i+1])
+            # check the slope of the line, if it is too steep, discard it
+            if abs(line[0]) > 0.5:
+                continue
             lines.append(line)
     return lines
 
@@ -109,10 +112,16 @@ def extract_regions_of_interest(image, contours):
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
         region = image[y:y+h, x:x+w]
-        # convert the region to the format that the classifier expects
-        region = convert_to_binary(region)
-        region = cv2.resize(region, (25, 25))
-        region = region.flatten().reshape(1, -1)
+        # # convert the region to grayscale
+        # gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+        # # apply thresholding to convert the region to black and white
+        # _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+        # # find contours in the binary image
+        # contours, _ = cv2.findContours(
+        #     binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # # draw the contours on the binary image
+        # cv2.drawContours(binary, contours, -1, (255, 255, 255), 1)
+        # regions.append(binary)
         regions.append(region)
     return regions
 
@@ -153,21 +162,23 @@ def create_results(images_path, results_path, classifier):
 def create_string(images_path, image_name, classifier):
     ''' Create the prediction string for a given image '''
     labels = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+    # initialize the string with the image name and its dimensions
     image = load_image(images_path + image_name)
     x = image.shape[0] - 1
     y = image.shape[1] - 1
     image_str = f'{image_name};0;0;{x};{y};1;1;'
+    # get the contours by lines
     binary = convert_to_binary(image)
     contours = get_contours(binary)
     lines = get_lines(contours)
     contours_by_lines = divide_contours_by_lines(contours, lines)
+    # for each line, extract the regions of interest and make a prediction
     for line_contours in contours_by_lines.values():
         if image_str[-1] != ';':
             image_str += '+'
         regions = extract_regions_of_interest(image, line_contours)
-        for region in regions:
-            prediction = classifier.predict(region)
-            image_str += labels[prediction[0]]
+        predictions = classifier.predict(regions)
+        image_str += ''.join([labels[pred] for pred in predictions])
     return image_str+'\n'
 
 
@@ -186,14 +197,22 @@ def show_results(image_path):
 if __name__ == '__main__':
     images_path = './test_ocr_panels/'
     training_path = './train_ocr/'
-    # Load the training data
+    output_path = './resultado.txt'
+
+    # load the training data
     train_X, train_y = getImagesAndLabels(training_path)
     train_X = preparingData(train_X)
-    # Train the classifier
-    classifier = LdaNormalBayesClassifier()
+
+    # train the classifier
+    classifier = HOGNormalBayesClassifier()
     classifier.train(train_X, train_y)
-    # Create the results file
-    create_results(
-        images_path, './resultado.txt', classifier)
-    # Show the results on a given image
+
+    # create the results file
+    create_results(images_path, output_path, classifier)
+
+    # show the results on a given image
     # show_results(images_path + '00041_0.png')
+
+    # show the results on a all images
+    # for image_name in os.listdir(images_path):
+    #     show_results(images_path + image_name)
